@@ -4,8 +4,15 @@
 int sensors[] = {A0, A1, A2, A3, A8, A9, A6, A7};
 //set up an array so to avoid duplicate data later on
 int lastValues[] = {-1, -1, -1, -1, -1, -1, -1, -1};
+int pingValue = 0;
 
+#include <NewPing.h>
 
+#define TRIGGER_PIN  7  // Arduino pin tied to trigger pin on the ultrasonic sensor.
+#define ECHO_PIN     5  // Arduino pin tied to echo pin on the ultrasonic sensor.
+#define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
+
+NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
 
 //I'm lazily using the Bare Conductive Touch Board arcore setup here, need to confirm which MIDI USB library this uses
 #include <MIDIUSB.h>
@@ -42,7 +49,26 @@ void loop() {
     }
    
   }
+  checkPing();
   
   
   
 }
+
+void checkPing(){
+  unsigned int uS = sonar.ping(); // Send ping, get ping time in microseconds (uS).
+//  Serial.print("Ping: ");
+  int thisValue = constrain(uS / US_ROUNDTRIP_CM, 0, 127); // Convert ping time to distance in cm and print result (0 = outside set distance range)
+  if (thisValue != pingValue){
+    pingValue = thisValue;
+     e.m1 = 176; //label as cc, channel 1
+     e.m2 = 8; //cc lane from sensor index number   
+     e.m3 = thisValue; //set the value from the sensor
+     e.type = 8; //what is this again? I'm rusty
+     if (thisValue != 0) {
+      MIDIUSB.write(e); 
+     }
+     
+  }
+}
+
