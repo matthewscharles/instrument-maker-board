@@ -34,8 +34,8 @@ void loop() {
  
   for (int i = 0; i < NUMSENSORS; i++) {
     // Read the sensor value, map it to a range of 0-127, and invert it
-    values[i] = 127 - (analogRead(sensors[i]) / 8);
-    // Normalize to the range 0-127 (current IM boards only send 0-76)
+    values[i] = constrain((127 - (analogRead(sensors[i]) / 8) - 50), 0, 127); 
+    //my current im boards only send a limited range, so boost this back up to 0-127
     values[i] = constrain(map(values[i], 0, 76, 0, 127), 0, 127);
     
     Serial.print(values[i]);
