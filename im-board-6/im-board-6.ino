@@ -95,6 +95,23 @@ void loop() {
     int values[NUMSENSORS];
     bool changeFlag = false; // Flag to track if pixels need to be updated
 
+    
+
+    for (int i = 0; i < NUMSENSORS; i++) {
+        values[i] = constrain((127 - (analogRead(sensors[i]) / 8) - 50), 0, 127);
+        values[i] = constrain(map(values[i], 0, 76, 0, 127), 0, 127);
+
+        if (values[i] != lastValues[i] || changeFlag) { // Update if there's a sensor change or a hue change via MIDI
+            sendControlChange(1, i, values[i]); // Control Change on channel 1
+            lastValues[i] = values[i];
+            lastDebounceTime[i] = millis();
+            
+            uint32_t rgb = HBtoRGB(hueValues[i], values[i]);  // Use sensor value for brightness
+            pixels.setPixelColor(i, rgb);
+            changeFlag = true; // Set flag to update the display
+        }
+    }
+
     midiEventPacket_t rx = MidiUSB.read();
     while (rx.header != 0) {
         uint8_t status = rx.byte1 & 0xF0;  // Control Change status byte is 0xB0
@@ -120,24 +137,15 @@ void loop() {
             // Serial.print(" with value ");
             // Serial.println(value);
             // printRGBComponents(rgb);
+        } else if (status == 0xB0 && channel == 1 && control >= 1 && control <= 6) {
+          uint8_t sensorIndex = control - 1; // 0-based index
+          values[sensorIndex] = value;
+          uint32_t rgb = HBtoRGB(hueValues[sensorIndex], value);  // Replace sensor value for brightness
+          pixels.setPixelColor(sensorIndex, rgb);
+          changeFlag = true;
         }
         
         rx = MidiUSB.read();  // Read next MIDI message
-    }
-
-    for (int i = 0; i < NUMSENSORS; i++) {
-        values[i] = constrain((127 - (analogRead(sensors[i]) / 8) - 50), 0, 127);
-        values[i] = constrain(map(values[i], 0, 76, 0, 127), 0, 127);
-
-        if (values[i] != lastValues[i] || changeFlag) { // Update if there's a sensor change or a hue change via MIDI
-            sendControlChange(1, i, values[i]); // Control Change on channel 1
-            lastValues[i] = values[i];
-            lastDebounceTime[i] = millis();
-            
-            uint32_t rgb = HBtoRGB(hueValues[i], values[i]);  // Use sensor value for brightness
-            pixels.setPixelColor(i, rgb);
-            changeFlag = true; // Set flag to update the display
-        }
     }
     
     // Update the NeoPixels display if any change is flagged
