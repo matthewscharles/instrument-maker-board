@@ -1,48 +1,59 @@
-//Charles Matthews 2019
+// Charles Matthews 2019
 
-//this is designed for a Pro Micro, and A4/A5 were not available for some reason
-int sensors[] = {A0, A1, A2, A3, A8, A9, A6, A7};
-//set up an array so to avoid duplicate data later on
-int lastValues[] = {-1, -1, -1, -1, -1, -1, -1, -1};
-
-
-
-//I'm lazily using the Bare Conductive Touch Board arcore setup here, need to confirm which MIDI USB library this uses
 #include <MIDIUSB.h>
-MIDIEvent e;
 
+int sensors[] = {A0, A1, A2, A3, A8, A9, A6, A7};
+const int NUMSENSORS = 8;
+
+// Array to store the last sensor values to avoid duplicates
+int lastValues[NUMSENSORS] = {-1, -1, -1, -1, -1, -1, -1, -1};
+
+const unsigned long debounceDelay = 10; // milliseconds
+unsigned long lastDebounceTime[NUMSENSORS] = {0};
+
+// Helper function to send Control Change MIDI messages
+void sendControlChange(uint8_t channel, uint8_t control, uint8_t value) {
+  midiEventPacket_t controlChange = {0x0B, 0xB0 | (channel - 1), control, value};
+  MidiUSB.sendMIDI(controlChange);
+  MidiUSB.flush(); // Ensure the MIDI message is sent immediately
+}
 
 void setup() {
-  //set all our sensor pins to input
-  for (int i = 0; i < 8; i++) {
+  // Initialize serial for debugging
+  Serial.begin(9600);
+  
+  // Set sensor pins as input
+  for (int i = 0; i < NUMSENSORS; i++) {
     pinMode(sensors[i], INPUT);  
   }
 }
 
 void loop() {
-  //we'll put our sensor values here just in case we need to process at a later date
-  int values[8];
- 
- for (int i = 0; i < 8; i++) {
-    //get the sensor value, squash down to 0-127, and invert it.
-    //not much use treating this as an array for now, but anyway..
-    values[i] = 127 - analogRead(sensors[i]) / 8; 
-    //check against previous value; only send if changed.
-    if (values[i] != lastValues[i]) {
-      //construct a MIDI message -- generic control change
-      //(this is for Pd; I'm not fussed about respecting GM conventions here, so start from 0)
-        e.m1 = 176; //label as cc, channel 1
-        e.m2 = i; //cc lane from sensor index number   
-        e.m3 = values[i]; //set the value from the sensor
-        e.type = 8; //what is this again? I'm rusty
-                      
-    MIDIUSB.write(e);
-    //write to the array to check next time
-    lastValues[i] = values[i];
+  int values[NUMSENSORS];
+  
+  for (int i = 0; i < NUMSENSORS; i++) {
+    // Read the sensor value, map it to a range of 0-127, and invert it
+    values[i] = constrain((127 - (analogRead(sensors[i]) / 8) - 50), 0, 127); 
+    // Current IM boards only send a limited range, so boost this back up to 0-127
+    values[i] = constrain(map(values[i], 0, 76, 0, 127), 0, 127);
+    
+    // Debugging: Print sensor values to Serial Monitor
+    Serial.print("Sensor ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(values[i]);
+    Serial.print(" | ");
+    
+    // Debounce check: Only send MIDI if enough time has passed since last change
+    if (values[i] != lastValues[i] && (millis() - lastDebounceTime[i] > debounceDelay)) {
+      sendControlChange(1, i, values[i]); // Control Change on channel 1
+      
+      // Update lastValues and lastDebounceTime
+      lastValues[i] = values[i];
+      lastDebounceTime[i] = millis();
     }
-   
   }
   
-  
+  Serial.println("inputs: ");
   
 }
